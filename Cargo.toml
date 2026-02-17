@@ -1,0 +1,21 @@
+[package]
+name = "FogID"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+eframe = { version = "0.31", default-features = false, features = ["default_fonts", "glow", "persistence"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "bmp"] }
+nalgebra = "0.33"
+rand = "0.9"
+rand_chacha = "0.9"
+rfd = "0.15"
+rayon = "1.10"
+sha2 = "0.10"
+bytemuck = "1"
+rustfft = "6"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

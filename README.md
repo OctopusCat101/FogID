@@ -1,122 +1,124 @@
 # FogID
 
-FogID 是一款基于 Rust 开发的隐形水印工具，支持在图片、视频和音频文件中嵌入和提取不可见的文本水印。采用 DWT + DCT + SVD 等信号处理算法，水印在视觉/听觉上不可感知，且能抵抗有损压缩、缩放、裁剪等常见操作。
+**English | [中文](README_zh.md)**
 
-## 功能特性
+FogID is an invisible watermarking tool built with Rust, supporting embedding and extracting invisible text watermarks in images, videos, and audio files. Using signal processing algorithms like DWT + DCT + SVD, watermarks are visually/audibly imperceptible and resistant to common operations such as lossy compression, scaling, and cropping.
 
-- 图片水印：DWT + DCT + SVD + QIM 算法，支持 PNG / JPEG / BMP 格式
-- 视频水印：基于亮度通道的块均值 QIM，多帧累积提取，支持 MP4 / MKV / AVI / MOV / WebM / FLV
-- 音频水印：FFT 频谱带调制，抗有损编码，支持 MP3 / WAV / FLAC / AAC / M4A / OGG
-- 密码保护：可选的 SHA-256 密钥派生 + 加密混洗
-- 现代 GUI：基于 egui 的深色主题界面，支持中文显示
+## Features
 
-## 技术架构
+- **Image Watermarking**: DWT + DCT + SVD + QIM algorithm, supports PNG / JPEG / BMP formats
+- **Video Watermarking**: Block-mean QIM on luminance channel, multi-frame cumulative extraction, supports MP4 / MKV / AVI / MOV / WebM / FLV
+- **Audio Watermarking**: FFT spectral band modulation, resistant to lossy encoding, supports MP3 / WAV / FLAC / AAC / M4A / OGG
+- **Password Protection**: Optional SHA-256 key derivation + encrypted shuffling
+- **Modern GUI**: Dark-themed interface based on egui with CJK font support
+
+## Architecture
 
 ```
 src/
-├── main.rs                 # 程序入口，字体加载
-├── app.rs                  # GUI 应用逻辑
-├── theme.rs                # 深色主题样式
+├── main.rs                 # Entry point, font loading
+├── app.rs                  # GUI application logic
+├── theme.rs                # Dark theme styling
 └── watermark/
-    ├── mod.rs              # 模块导出
-    ├── core.rs             # 核心水印算法 (DWT+DCT+SVD+QIM)
-    ├── dct.rs              # 离散余弦变换
-    ├── dwt.rs              # 离散小波变换 (Haar)
-    ├── text.rs             # 文本编码/解码 (CRC-8 校验)
-    ├── video.rs            # 视频水印 (FFmpeg 管道)
-    ├── audio.rs            # 音频水印 (FFmpeg 管道)
-    └── fft.rs              # FFT 频谱带引擎
+    ├── mod.rs              # Module exports
+    ├── core.rs             # Core watermark algorithm (DWT+DCT+SVD+QIM)
+    ├── dct.rs              # Discrete Cosine Transform
+    ├── dwt.rs              # Discrete Wavelet Transform (Haar)
+    ├── text.rs             # Text encoding/decoding (CRC-8 checksum)
+    ├── video.rs            # Video watermarking (FFmpeg pipeline)
+    ├── audio.rs            # Audio watermarking (FFmpeg pipeline)
+    └── fft.rs              # FFT spectral band engine
 ```
 
-## 环境要求
+## Requirements
 
-- Rust 2024 edition（需要较新版本的 Rust 工具链）
-- FFmpeg：视频和音频功能依赖 FFmpeg，需安装并加入系统 PATH
-- Windows：中文字体自动加载（SimHei / Microsoft YaHei）
+- Rust 2024 edition (requires a recent Rust toolchain)
+- FFmpeg: Required for video and audio features, must be installed and available in system PATH
+- Windows: Chinese fonts auto-loaded (SimHei / Microsoft YaHei)
 
-## 构建与运行
+## Build & Run
 
 ```bash
-# 构建 release 版本
+# Build release version
 cargo build --release
 
-# 直接运行
+# Run directly
 cargo run --release
 ```
 
-Release 构建已配置最大优化（opt-level 3 + LTO + 单 codegen unit）。
+Release builds are configured with maximum optimization (opt-level 3 + LTO + single codegen unit).
 
-## 使用方式
+## Usage
 
-启动后进入 GUI 界面，操作流程：
+After launching, the GUI interface provides the following workflow:
 
-1. 选择模式：嵌入（Embed）或提取（Extract）
-2. 选择媒体类型：图片 / 视频 / 音频
-3. 选择输入文件
-4. 嵌入模式下输入水印文本（最长 60 字节 UTF-8）
-5. 可选：启用密码保护
-6. 选择输出路径，点击执行
+1. Select mode: Embed or Extract
+2. Select media type: Image / Video / Audio
+3. Select input file
+4. In embed mode, enter watermark text (max 60 bytes UTF-8)
+5. Optional: Enable password protection
+6. Select output path and execute
 
-界面提供实时进度条、图片预览和状态反馈。
+The interface provides real-time progress bar, image preview, and status feedback.
 
-## 算法细节
+## Algorithm Details
 
-### 图片水印
+### Image Watermarking
 
-RGB -> YUV 色彩空间转换 -> 多级 Haar DWT -> LL 子带分块 DCT -> 系数加密混洗 -> SVD 分解 -> QIM 嵌入 -> 逆变换还原。U/V 通道降低调制强度以减少色彩偏移。提取时支持暴力网格对齐搜索，应对裁剪场景。
+RGB -> YUV color space conversion -> Multi-level Haar DWT -> LL subband block DCT -> Coefficient encrypted shuffling -> SVD decomposition -> QIM embedding -> Inverse transform reconstruction. U/V channels use reduced modulation strength to minimize color shift. Extraction supports brute-force grid alignment search for cropping scenarios.
 
-### 视频水印
+### Video Watermarking
 
-FFmpeg 解码为原始 RGB 帧 -> 8x8 块亮度均值计算 -> 基于块方差的自适应 QIM -> 等量 RGB 偏移（仅调制亮度）-> FFmpeg 编码（H.264 / VP9）。提取采用多帧置信度加权累积，CRC 校验通过即提前退出。
+FFmpeg decodes to raw RGB frames -> 8x8 block luminance mean calculation -> Variance-based adaptive QIM -> Equal RGB offset (luminance-only modulation) -> FFmpeg encoding (H.264 / VP9). Extraction uses multi-frame confidence-weighted accumulation with early exit on CRC validation.
 
-### 音频水印
+### Audio Watermarking
 
-FFmpeg 解码为 32-bit float PCM -> 单声道降混用于水印计算 -> 1024 样本非重叠帧 -> FFT 频谱带配对调制 -> IFFT 增量叠加至所有声道 -> FFmpeg 编码。提取时执行样本偏移 x 帧偏移的对齐搜索网格。
+FFmpeg decodes to 32-bit float PCM -> Mono downmix for watermark calculation -> 1024-sample non-overlapping frames -> FFT spectral band pair modulation -> IFFT delta overlay to all channels -> FFmpeg encoding. Extraction performs sample offset × frame offset alignment grid search.
 
-### 文本编码格式
+### Text Encoding Format
 
 ```
 [Magic 2B] + [Length 1B] + [UTF-8 Text] + [CRC8 1B] + [Padding]
 ```
 
-固定 64 字节（512 位），最大有效载荷 60 字节，CRC-8 校验确保数据完整性。
+Fixed 64 bytes (512 bits), maximum payload 60 bytes, CRC-8 checksum ensures data integrity.
 
-## 抗攻击能力
+## Attack Resistance
 
-| 攻击类型 | 图片 | 视频 | 音频 |
-|---------|------|------|------|
-| 有损压缩 (JPEG/H.264/AAC) | 支持 | 支持 | 支持 |
-| 缩放 | 支持 | - | - |
-| 裁剪 | 支持（对齐搜索） | - | 支持（对齐搜索） |
-| 格式转换 | 支持 | 支持 | 支持 |
+| Attack Type | Image | Video | Audio |
+|-------------|-------|-------|-------|
+| Lossy Compression (JPEG/H.264/AAC) | ✓ | ✓ | ✓ |
+| Scaling | ✓ | - | - |
+| Cropping | ✓ (alignment search) | - | ✓ (alignment search) |
+| Format Conversion | ✓ | ✓ | ✓ |
 
-## 依赖项
+## Dependencies
 
-| 依赖 | 用途 |
-|------|------|
-| eframe 0.31 | GUI 框架 (egui) |
-| image 0.25 | 图片读写 |
-| nalgebra 0.33 | SVD 线性代数运算 |
-| rand / rand_chacha | 加密随机数混洗 |
-| sha2 0.10 | 密码哈希 |
-| rayon 1.10 | 并行计算 |
-| rustfft 6 | 音频 FFT |
-| rfd 0.15 | 原生文件对话框 |
+| Dependency | Purpose |
+|------------|----------|
+| eframe 0.31 | GUI framework (egui) |
+| image 0.25 | Image I/O |
+| nalgebra 0.33 | SVD linear algebra operations |
+| rand / rand_chacha | Cryptographic random shuffling |
+| sha2 0.10 | Password hashing |
+| rayon 1.10 | Parallel computation |
+| rustfft 6 | Audio FFT |
+| rfd 0.15 | Native file dialogs |
 
-## 适用场景
+## Use Cases
 
-- 版权保护：在媒体文件中嵌入所有权信息
-- 内容溯源：追踪泄露内容的来源
-- 真实性验证：校验媒体文件是否被篡改
-- 内容分发监控：跟踪内容传播路径
+- **Copyright Protection**: Embed ownership information in media files
+- **Content Tracing**: Track the source of leaked content
+- **Authenticity Verification**: Verify if media files have been tampered with
+- **Distribution Monitoring**: Track content distribution paths
 
-## 已知限制
+## Known Limitations
 
-- 视频和音频功能依赖外部 FFmpeg
-- 水印文本上限 60 字节
-- 字体加载针对 Windows 优化
-- 视频/音频处理为离线模式，不支持流式处理
+- Video and audio features require external FFmpeg
+- Watermark text limited to 60 bytes
+- Font loading optimized for Windows
+- Video/audio processing is offline mode, streaming not supported
 
-## 许可证
+## License
 
-本项目基于 [MIT License](LICENSE) 开源。
+This project is open-sourced under the [MIT License](LICENSE).

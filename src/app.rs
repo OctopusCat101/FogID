@@ -1,5 +1,4 @@
 use eframe::egui::{self, Color32, CornerRadius, Margin, RichText, Stroke, TextureHandle};
-use image::DynamicImage;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
@@ -27,7 +26,7 @@ enum MediaType {
 }
 
 enum ProcessResult {
-    EmbedImageDone(image::RgbImage),
+    EmbedImageDone(PathBuf),
     ExtractDone(String),
     EmbedVideoDone(PathBuf),
     EmbedAudioDone(PathBuf),
@@ -61,9 +60,8 @@ pub struct App {
     input_dims: Option<(u32, u32)>,
 
     // Result
-    result_texture: Option<TextureHandle>,
-    result_rgb: Option<image::RgbImage>,
     result_text: Option<String>,
+    result_image_path: Option<PathBuf>,
     result_video_path: Option<PathBuf>,
     result_audio_path: Option<PathBuf>,
 
@@ -89,9 +87,8 @@ impl App {
             input_path: None,
             input_texture: None,
             input_dims: None,
-            result_texture: None,
-            result_rgb: None,
             result_text: None,
+            result_image_path: None,
             result_video_path: None,
             result_audio_path: None,
             status: "就绪".into(),
@@ -193,13 +190,6 @@ impl App {
         ))
     }
 
-    fn rgb_to_texture(ctx: &egui::Context, img: &image::RgbImage, name: &str) -> TextureHandle {
-        let rgba = DynamicImage::ImageRgb8(img.clone()).to_rgba8();
-        let (w, h) = rgba.dimensions();
-        let ci = egui::ColorImage::from_rgba_unmultiplied([w as usize, h as usize], rgba.as_raw());
-        ctx.load_texture(name, ci, egui::TextureOptions::default())
-    }
-
     fn show_preview(ui: &mut egui::Ui, tex: &TextureHandle, max: egui::Vec2) {
         let ts = tex.size_vec2();
         let scale = (max.x / ts.x).min(max.y / ts.y).min(1.0);
@@ -235,12 +225,35 @@ impl App {
             return;
         }
 
+        // Ask for output path
+        let input_ext = cp
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("png")
+            .to_ascii_lowercase();
+        let (filter_label, filter_ext) = match input_ext.as_str() {
+            "jpg" | "jpeg" => ("JPEG 图片", "jpg"),
+            "bmp" => ("BMP 图片", "bmp"),
+            _ => ("PNG 图片", "png"),
+        };
+        let stem = cp
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_else(|| "output".to_string());
+        let output = match rfd::FileDialog::new()
+            .add_filter(filter_label, &[filter_ext])
+            .set_file_name(&format!("{stem}_watermarked.{filter_ext}"))
+            .save_file()
+        {
+            Some(p) => p,
+            None => return,
+        };
+
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         self.processing = true;
-        self.status = "嵌入中…".into();
-        self.result_texture = None;
-        self.result_rgb = None;
+        self.status = "图片嵌入中…".into();
+        self.result_image_path = None;
         self.result_video_path = None;
         self.result_audio_path = None;
         let progress = self.progress.clone();
@@ -264,9 +277,14 @@ impl App {
             match crate::watermark::embed(&carrier.to_rgb8(), &wm_bits, &params, |p| {
                 *progress.lock().unwrap() = p.clamp(0.0, 1.0);
             }) {
-                Ok(r) => {
-                    let _ = tx.send(ProcessResult::EmbedImageDone(r));
-                }
+                Ok(img) => match img.save(&output) {
+                    Ok(_) => {
+                        let _ = tx.send(ProcessResult::EmbedImageDone(output));
+                    }
+                    Err(e) => {
+                        let _ = tx.send(ProcessResult::Error(format!("保存失败：{e}")));
+                    }
+                },
                 Err(e) => {
                     let _ = tx.send(ProcessResult::Error(e));
                 }
@@ -326,8 +344,7 @@ impl App {
         self.receiver = Some(rx);
         self.processing = true;
         self.status = "视频嵌入中…".into();
-        self.result_texture = None;
-        self.result_rgb = None;
+        self.result_image_path = None;
         self.result_video_path = None;
         self.result_audio_path = None;
         let progress = self.progress.clone();
@@ -375,23 +392,38 @@ impl App {
             return;
         }
 
+        // Ask for output path
+        let input_ext = cp
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("m4a")
+            .to_ascii_lowercase();
+        let (filter_label, filter_ext) = match input_ext.as_str() {
+            "mp3" => ("MP3 音频", "mp3"),
+            "wav" => ("WAV 音频", "wav"),
+            "flac" => ("FLAC 音频", "flac"),
+            "aac" => ("AAC 音频", "aac"),
+            "ogg" => ("OGG 音频", "ogg"),
+            _ => ("M4A 音频", "m4a"),
+        };
         let stem = cp
             .file_stem()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "audio".to_string());
-        let ext = cp
-            .extension()
-            .and_then(|e| e.to_str())
-            .unwrap_or("m4a")
-            .to_string();
-        let output = cp.with_file_name(format!("{stem}_watermarked.{ext}"));
+        let output = match rfd::FileDialog::new()
+            .add_filter(filter_label, &[filter_ext])
+            .set_file_name(&format!("{stem}_watermarked.{filter_ext}"))
+            .save_file()
+        {
+            Some(p) => p,
+            None => return,
+        };
 
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         self.processing = true;
         self.status = "音频嵌入中…".into();
-        self.result_texture = None;
-        self.result_rgb = None;
+        self.result_image_path = None;
         self.result_video_path = None;
         self.result_audio_path = None;
         let progress = self.progress.clone();
@@ -439,7 +471,7 @@ impl App {
         self.receiver = Some(rx);
         self.processing = true;
         self.status = "提取中…".into();
-        self.result_texture = None;
+        self.result_image_path = None;
         self.result_text = None;
         self.result_video_path = None;
         self.result_audio_path = None;
@@ -487,7 +519,7 @@ impl App {
         self.receiver = Some(rx);
         self.processing = true;
         self.status = "视频提取中…".into();
-        self.result_texture = None;
+        self.result_image_path = None;
         self.result_text = None;
         self.result_audio_path = None;
         let progress = self.progress.clone();
@@ -527,7 +559,7 @@ impl App {
         self.receiver = Some(rx);
         self.processing = true;
         self.status = "音频提取中…".into();
-        self.result_texture = None;
+        self.result_image_path = None;
         self.result_text = None;
         self.result_video_path = None;
         self.result_audio_path = None;
@@ -548,29 +580,30 @@ impl App {
         });
     }
 
-    fn poll_result(&mut self, ctx: &egui::Context) {
+    fn poll_result(&mut self, _ctx: &egui::Context) {
         if let Some(rx) = &self.receiver {
             if let Ok(result) = rx.try_recv() {
                 self.processing = false;
                 self.receiver = None;
                 match result {
-                    ProcessResult::EmbedImageDone(img) => {
-                        self.result_texture = Some(Self::rgb_to_texture(ctx, &img, "result"));
-                        self.result_rgb = Some(img);
+                    ProcessResult::EmbedImageDone(path) => {
+                        self.result_image_path = Some(path.clone());
                         self.result_video_path = None;
                         self.result_audio_path = None;
-                        self.status = "✓ 嵌入完成".into();
+                        self.status = format!("✓ 图片嵌入完成 → {}", path.display());
                     }
                     ProcessResult::ExtractDone(text) => {
                         self.result_text = Some(text);
                         self.status = "✓ 提取完成".into();
                     }
                     ProcessResult::EmbedVideoDone(path) => {
+                        self.result_image_path = None;
                         self.result_video_path = Some(path.clone());
                         self.result_audio_path = None;
                         self.status = format!("✓ 视频嵌入完成 → {}", path.display());
                     }
                     ProcessResult::EmbedAudioDone(path) => {
+                        self.result_image_path = None;
                         self.result_audio_path = Some(path.clone());
                         self.result_video_path = None;
                         self.status = format!("✓ 音频嵌入完成 → {}", path.display());
@@ -614,9 +647,8 @@ impl App {
                 if ui.add(btn).clicked() && !self.processing && self.mode != mode {
                     self.mode = mode;
                     // Clear results when switching modes
-                    self.result_texture = None;
-                    self.result_rgb = None;
                     self.result_text = None;
+                    self.result_image_path = None;
                     self.result_video_path = None;
                     self.result_audio_path = None;
                 }
@@ -659,9 +691,8 @@ impl App {
                     self.input_path = None;
                     self.input_texture = None;
                     self.input_dims = None;
-                    self.result_texture = None;
-                    self.result_rgb = None;
                     self.result_text = None;
+                    self.result_image_path = None;
                     self.result_video_path = None;
                     self.result_audio_path = None;
                 }
@@ -847,56 +878,6 @@ impl App {
         }
     }
 
-    fn ui_save_button(&mut self, ui: &mut egui::Ui) {
-        if self.result_rgb.is_none() {
-            return;
-        }
-        ui.add_space(8.0);
-        let btn = egui::Button::new(RichText::new("保存结果").size(13.0).color(TEXT_PRIMARY))
-            .fill(Color32::from_white_alpha(12))
-            .stroke(Stroke::new(1.0, Color32::from_white_alpha(30)))
-            .corner_radius(CornerRadius::same(10))
-            .min_size(egui::vec2(ui.available_width(), 36.0));
-
-        if ui.add(btn).clicked() {
-            // Determine default format from input file extension
-            let (filter_label, filter_ext, default_ext) = self
-                .carrier_path
-                .as_ref()
-                .and_then(|p| p.extension())
-                .and_then(|e| e.to_str())
-                .map(|e| {
-                    let e_lower = e.to_ascii_lowercase();
-                    match e_lower.as_str() {
-                        "jpg" | "jpeg" => ("JPEG", "jpg", "jpg"),
-                        "bmp" => ("BMP", "bmp", "bmp"),
-                        _ => ("PNG", "png", "png"),
-                    }
-                })
-                .unwrap_or(("PNG", "png", "png"));
-
-            let default_name = self
-                .carrier_path
-                .as_ref()
-                .and_then(|p| p.file_stem())
-                .map(|s| format!("{}_watermarked.{}", s.to_string_lossy(), default_ext))
-                .unwrap_or_else(|| format!("output.{default_ext}"));
-
-            if let Some(path) = rfd::FileDialog::new()
-                .add_filter(filter_label, &[filter_ext])
-                .set_file_name(&default_name)
-                .save_file()
-            {
-                if let Some(ref img) = self.result_rgb {
-                    match img.save(&path) {
-                        Ok(_) => self.status = format!("✓ 已保存到 {}", path.display()),
-                        Err(e) => self.status = format!("✗ 保存失败：{e}"),
-                    }
-                }
-            }
-        }
-    }
-
     fn ui_status(&self, ui: &mut egui::Ui) {
         ui.add_space(12.0);
         if self.processing {
@@ -1029,14 +1010,35 @@ impl App {
                 );
                 ui.add_space(gap);
                 // Result
-                Self::ui_preview_card(
-                    ui,
-                    "嵌入结果",
-                    &self.result_texture,
-                    &None,
-                    "嵌入后的图片将显示在此处",
-                    egui::vec2(img_w, img_h),
-                );
+                Self::glass_frame().show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.label(
+                        RichText::new("嵌入结果")
+                            .size(11.0)
+                            .color(Color32::from_white_alpha(120)),
+                    );
+                    ui.add_space(4.0);
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(img_w, img_h), egui::Sense::hover());
+                    let text = if let Some(p) = &self.result_image_path {
+                        format!("✓ {}", p.display())
+                    } else {
+                        "嵌入后的图片路径将显示在此处".into()
+                    };
+                    let alpha = if self.result_image_path.is_some() {
+                        180
+                    } else {
+                        40
+                    };
+                    ui.put(
+                        rect,
+                        egui::Label::new(
+                            RichText::new(text)
+                                .size(13.0)
+                                .color(Color32::from_white_alpha(alpha)),
+                        ),
+                    );
+                });
             }
             MediaType::Video => {
                 Self::ui_path_placeholder(
@@ -1258,7 +1260,6 @@ impl eframe::App for App {
 
                     // Execute
                     self.ui_exec_button(ui);
-                    self.ui_save_button(ui);
 
                     // Status
                     self.ui_status(ui);

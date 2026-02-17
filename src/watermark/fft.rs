@@ -21,7 +21,6 @@ use std::sync::Arc;
 // Constants
 // ---------------------------------------------------------------------------
 
-/// FFT frame size.
 pub const FRAME_SIZE: usize = 1024;
 
 /// Number of paired bands per data bit per frame.

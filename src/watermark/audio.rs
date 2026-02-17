@@ -221,7 +221,6 @@ pub fn embed_audio(
     let channels = info.channels as usize;
     let sample_rate = info.sample_rate;
 
-    // Shuffle watermark bits
     let shuffled = core::prepare_bits(wm_bits, params.seed_wm);
 
     // Decode all audio into memory (needed for overlap-add)
@@ -267,10 +266,9 @@ pub fn embed_audio(
 
     on_progress(0.05);
 
-    // Downmix to mono for watermark embedding
     let mono_samples = downmix_to_mono(&all_interleaved, channels);
 
-    // Embed watermark using overlap-add FFT engine
+    // Embed via overlap-add FFT engine
     let watermarked_mono = fft::embed_overlap_add(&mono_samples, &shuffled, params.seed_wm);
 
     on_progress(0.70);
@@ -413,7 +411,6 @@ pub fn extract_audio(
 
     on_progress(0.05);
 
-    // Downmix to mono
     let mono_samples = downmix_to_mono(&all_interleaved, channels);
 
     let wm_bit_count = super::text::FIXED_WM_BITS;

@@ -885,7 +885,6 @@ impl App {
                 ui.spinner();
                 ui.label(RichText::new(&self.status).size(12.0).color(TEXT_SECONDARY));
             });
-            // Progress bar
             let p = *self.progress.lock().unwrap();
             ui.add_space(6.0);
             let bar = egui::ProgressBar::new(p)
@@ -1009,7 +1008,7 @@ impl App {
                     egui::vec2(img_w, img_h),
                 );
                 ui.add_space(gap);
-                // Result
+                // 嵌入结果输出路径
                 Self::glass_frame().show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.label(
@@ -1049,7 +1048,6 @@ impl App {
                     "未选择视频文件",
                 );
                 ui.add_space(gap);
-                // Result info
                 Self::glass_frame().show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.label(
@@ -1223,7 +1221,6 @@ impl eframe::App for App {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.add_space(4.0);
 
-                    // Title
                     ui.label(
                         RichText::new("FogID")
                             .size(22.0)
@@ -1233,15 +1230,13 @@ impl eframe::App for App {
                     ui.label(RichText::new("隐形水印工具").size(12.0).color(TEXT_DIM));
                     ui.add_space(14.0);
 
-                    // Mode toggle
                     self.ui_mode_toggle(ui);
                     ui.add_space(6.0);
 
-                    // Media type toggle
                     self.ui_media_toggle(ui);
                     ui.add_space(14.0);
 
-                    // Files (+ watermark text & frame interval in embed mode only)
+                    // 文件选择 + 嵌入模式下的水印文字输入
                     Self::glass_frame().show(ui, |ui| {
                         Self::section_label(ui, "文  件");
                         match self.mode {
@@ -1254,14 +1249,11 @@ impl eframe::App for App {
                     });
                     ui.add_space(10.0);
 
-                    // Password toggle
                     self.ui_password_toggle(ui);
                     ui.add_space(14.0);
 
-                    // Execute
                     self.ui_exec_button(ui);
 
-                    // Status
                     self.ui_status(ui);
                 });
             });

@@ -2,19 +2,14 @@ use eframe::egui::{self, Color32, CornerRadius, Stroke, Visuals};
 
 // ─── Black + White Palette ───────────────────────────────────────────────────
 
-/// Pure black background.
 pub const BG_BASE: Color32 = Color32::from_rgb(8, 8, 8);
-/// Side-panel / elevated surface – very slightly lighter.
+/// Slightly elevated surface for side-panel contrast.
 pub const BG_SURFACE: Color32 = Color32::from_rgb(16, 16, 16);
-/// Primary text – crisp white.
 pub const TEXT_PRIMARY: Color32 = Color32::from_gray(240);
-/// Secondary text.
 pub const TEXT_SECONDARY: Color32 = Color32::from_gray(140);
-/// Dim / placeholder text.
+/// Used for placeholders and disabled elements.
 pub const TEXT_DIM: Color32 = Color32::from_gray(60);
-/// Success.
 pub const SUCCESS: Color32 = Color32::from_rgb(100, 230, 150);
-/// Error.
 pub const ERROR: Color32 = Color32::from_rgb(240, 100, 100);
 
 pub fn apply(ctx: &egui::Context) {

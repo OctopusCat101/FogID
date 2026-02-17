@@ -208,30 +208,27 @@ fn block_embed(
     mod1: f64,
     mod2: Option<f64>,
 ) -> Vec<f64> {
-    // DCT
     let dct_coeffs = cos_table.dct2(block);
 
-    // Shuffle DCT coefficients
     let mut shuffled = vec![0.0f64; block_size * block_size];
     for (i, &idx) in dct_shuffle_index.iter().enumerate() {
         shuffled[i] = dct_coeffs[idx];
     }
 
-    // SVD
     let mat = DMatrix::from_row_slice(block_size, block_size, &shuffled);
     let svd = mat.svd(true, true);
     let u = svd.u.unwrap();
     let v_t = svd.v_t.unwrap();
     let mut s = svd.singular_values;
 
-    // QIM embedding on s[0]
+    // QIM: quantize s[0] to encode the watermark bit
     if wm_bit >= 128 {
         s[0] = s[0] - s[0] % mod1 + 0.75 * mod1;
     } else {
         s[0] = s[0] - s[0] % mod1 + 0.25 * mod1;
     }
 
-    // Optional: QIM on s[1]
+    // Optional: QIM on s[1] for extra robustness
     if let Some(m2) = mod2 {
         if s.len() > 1 {
             if wm_bit >= 128 {
@@ -242,12 +239,11 @@ fn block_embed(
         }
     }
 
-    // Reconstruct
+    // Reconstruct matrix and convert back to spatial domain
     let sigma = DMatrix::from_diagonal(&s);
     let reconstructed = &u * sigma * &v_t;
 
-    // Inverse shuffle
-    // nalgebra stores column-major, convert back to row-major
+    // nalgebra stores column-major; convert back to row-major
     let mut recon_row_major = vec![0.0f64; block_size * block_size];
     for r in 0..block_size {
         for c in 0..block_size {
@@ -273,24 +269,21 @@ fn block_extract(
     mod1: f64,
     mod2: Option<f64>,
 ) -> f64 {
-    // DCT
     let dct_coeffs = cos_table.dct2(block);
 
-    // Shuffle
     let mut shuffled = vec![0.0f64; block_size * block_size];
     for (i, &idx) in dct_shuffle_index.iter().enumerate() {
         shuffled[i] = dct_coeffs[idx];
     }
 
-    // SVD
     let mat = DMatrix::from_row_slice(block_size, block_size, &shuffled);
     let svd = mat.svd(false, false);
     let s = svd.singular_values;
 
-    // QIM extraction from s[0]
+    // QIM: decode bit from s[0] quantization residue
     let wm1 = if s[0] % mod1 > mod1 / 2.0 { 255.0 } else { 0.0 };
 
-    // Optional: from s[1]
+    // Optional: blend s[1] decision for extra robustness
     if let Some(m2) = mod2 {
         if s.len() > 1 {
             let wm2 = if s[1] % m2 > m2 / 2.0 { 255.0 } else { 0.0 };
@@ -557,13 +550,12 @@ pub fn embed(
     );
     on_progress(0.85);
 
-    // Inverse DWT
+    // Inverse DWT → YUV → RGB
     let y_reconstructed = idwt2_multilevel(&y_ll_new, &y_coeffs);
     let u_reconstructed = idwt2_multilevel(&u_ll_new, &u_coeffs);
     let v_reconstructed = idwt2_multilevel(&v_ll_new, &v_coeffs);
     on_progress(0.95);
 
-    // Convert back to RGB
     Ok(yuv_planes_to_image(
         &y_reconstructed,
         &u_reconstructed,
@@ -592,14 +584,13 @@ pub fn extract(
     let (y_plane, u_plane, v_plane, pad_h, pad_w, _orig_w, _orig_h) =
         image_to_yuv_planes(img_rgb, params.dwt_deep, params.block_size);
 
-    // Multi-level DWT
+    // Multi-level DWT on each YUV channel
     on_progress(0.05);
     let (y_ll, yr, yc, _y_coeffs) = dwt2_multilevel(&y_plane, pad_h, pad_w, params.dwt_deep);
     let (u_ll, _ur, _uc, _u_coeffs) = dwt2_multilevel(&u_plane, pad_h, pad_w, params.dwt_deep);
     let (v_ll, _vr, _vc, _v_coeffs) = dwt2_multilevel(&v_plane, pad_h, pad_w, params.dwt_deep);
     on_progress(0.10);
 
-    // Pre-compute shared resources
     let cos_table = CosTable::new(params.block_size);
 
     // U/V channels use reduced mod (must match embedding)

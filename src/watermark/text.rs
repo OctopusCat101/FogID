@@ -35,12 +35,12 @@ fn crc8(data: &[u8]) -> u8 {
 pub fn text_to_bits(text: &str) -> Result<Vec<u8>, String> {
     let text = text.trim();
     if text.is_empty() {
-        return Err("水印文字不能为空".into());
+        return Err(crate::i18n::t("wm_text_empty").into());
     }
     let utf8 = text.as_bytes();
     let max_payload = FIXED_WM_BYTES - 4; // magic(2) + len(1) + CRC(1)
     if utf8.len() > max_payload {
-        return Err(format!("水印文字过长（最多 {} 字节 UTF-8）", max_payload));
+        return Err(crate::i18n::tf("wm_text_too_long", &max_payload));
     }
 
     // Header: magic (2) + length (1) + payload + CRC8 (1) + zero-padding
@@ -69,7 +69,7 @@ pub fn text_to_bits(text: &str) -> Result<Vec<u8>, String> {
 pub fn bits_to_text(raw_bits: &[u8]) -> Result<String, String> {
     // Need at least header: 2 (magic) + 1 (length) + 1 (CRC) = 4 bytes = 32 bits
     if raw_bits.len() < 32 {
-        return Err("提取数据不足".into());
+        return Err(crate::i18n::t("wm_extract_insufficient").into());
     }
 
     // Collapse bits back to bytes
@@ -90,23 +90,23 @@ pub fn bits_to_text(raw_bits: &[u8]) -> Result<String, String> {
 
     // Verify magic
     if bytes.len() < 4 || bytes[0] != MAGIC[0] || bytes[1] != MAGIC[1] {
-        return Err("未检测到水印（魔数不匹配）".into());
+        return Err(crate::i18n::t("wm_magic_mismatch").into());
     }
 
     let text_len = bytes[2] as usize;
     if bytes.len() < 4 + text_len {
-        return Err("提取数据不完整".into());
+        return Err(crate::i18n::t("wm_data_incomplete").into());
     }
 
     // Verify CRC8
     let crc_idx = 3 + text_len;
     let expected_crc = crc8(&bytes[..crc_idx]);
     if bytes[crc_idx] != expected_crc {
-        return Err("水印校验失败（CRC 不匹配）".into());
+        return Err(crate::i18n::t("wm_crc_mismatch").into());
     }
 
     let text_bytes = &bytes[3..3 + text_len];
-    String::from_utf8(text_bytes.to_vec()).map_err(|_| "水印文字解码失败（无效 UTF-8）".into())
+    String::from_utf8(text_bytes.to_vec()).map_err(|_| crate::i18n::t("wm_utf8_failed").into())
 }
 
 /// Quick check: do the first two bytes match the magic?

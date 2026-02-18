@@ -14,6 +14,7 @@ rayon = "1.10"
 sha2 = "0.10"
 bytemuck = "1"
 rustfft = "6"
+sys-locale = "0.3"
 
 [build-dependencies]
 winres = "0.1"

@@ -487,10 +487,7 @@ pub fn embed(
     let ll_cols = pad_w / (1 << params.dwt_deep);
     let capacity = (ll_rows / params.block_size) * (ll_cols / params.block_size);
     if capacity < wm_size {
-        return Err(format!(
-            "水印太大：需要 {} 个块，但载体只有 {} 个块的容量。\n请减小水印尺寸或增大载体图片。",
-            wm_size, capacity
-        ));
+        return Err(crate::i18n::tf2("wm_too_large", &wm_size, &capacity));
     }
 
     // Multi-level DWT for each channel
@@ -708,7 +705,7 @@ pub fn embed_video_frame_in_place(
     params: &WatermarkParams,
 ) -> Result<(), String> {
     if wm_bits.is_empty() {
-        return Err("水印数据为空".into());
+        return Err(crate::i18n::t("wm_data_empty").into());
     }
 
     let wm_flat = prepare_bits(wm_bits, params.seed_wm);
@@ -718,7 +715,7 @@ pub fn embed_video_frame_in_place(
     let blocks_r = h as usize / VIDEO_BLOCK_SIZE;
     let capacity = blocks_r * blocks_c;
     if capacity == 0 {
-        return Err("视频帧尺寸过小，无法嵌入水印".into());
+        return Err(crate::i18n::t("wm_frame_too_small_embed").into());
     }
 
     // Parallel phase: compute block deltas from the unmodified frame.
@@ -778,14 +775,14 @@ pub fn extract_video_frame_with_confidence(
     params: &WatermarkParams,
 ) -> Result<(Vec<u8>, Vec<f64>), String> {
     if wm_bit_count == 0 {
-        return Err("水印位数无效".into());
+        return Err(crate::i18n::t("wm_bit_count_invalid").into());
     }
 
     let (w, h) = frame_rgb.dimensions();
     let blocks_c = w as usize / VIDEO_BLOCK_SIZE;
     let blocks_r = h as usize / VIDEO_BLOCK_SIZE;
     if blocks_r == 0 || blocks_c == 0 {
-        return Err("视频帧尺寸过小，无法提取水印".into());
+        return Err(crate::i18n::t("wm_frame_too_small_extract").into());
     }
     let capacity = blocks_r * blocks_c;
 
@@ -908,6 +905,6 @@ pub fn extract_robust(
         on_progress(attempt as f32 / total_attempts as f32);
     }
 
-    Err("未检测到水印（已尝试多种对齐方式）".into())
+    Err(crate::i18n::t("wm_not_detected_align").into())
 }
 

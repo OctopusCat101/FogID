@@ -79,23 +79,20 @@ pub fn probe(path: &Path) -> Result<VideoInfo, String> {
             .arg(path),
     )
     .output()
-    .map_err(|e| format!("无法运行 ffprobe: {e}\n请确保已安装 FFmpeg 并加入系统 PATH"))?;
+    .map_err(|e| crate::i18n::tf("ffprobe_not_found", &e))?;
 
     if !out.status.success() {
-        return Err(format!(
-            "ffprobe 失败: {}",
-            String::from_utf8_lossy(&out.stderr)
-        ));
+        return Err(crate::i18n::tf("ffprobe_failed", &String::from_utf8_lossy(&out.stderr)));
     }
 
     let text = String::from_utf8_lossy(&out.stdout);
     let lines: Vec<&str> = text.trim().lines().collect();
     if lines.len() < 4 {
-        return Err(format!("ffprobe 输出格式异常: {text}"));
+        return Err(crate::i18n::tf("ffprobe_bad_output", &text));
     }
 
-    let width: u32 = lines[0].trim().parse().map_err(|_| "无法解析视频宽度")?;
-    let height: u32 = lines[1].trim().parse().map_err(|_| "无法解析视频高度")?;
+    let width: u32 = lines[0].trim().parse().map_err(|_| crate::i18n::t("parse_video_width"))?;
+    let height: u32 = lines[1].trim().parse().map_err(|_| crate::i18n::t("parse_video_height"))?;
     let fps = lines[2].trim().to_string();
     let frame_count = lines[3]
         .trim()
@@ -150,9 +147,9 @@ fn read_frame(r: &mut impl Read, buf: &mut [u8]) -> Result<bool, String> {
     while pos < buf.len() {
         match r.read(&mut buf[pos..]) {
             Ok(0) if pos == 0 => return Ok(false),
-            Ok(0) => return Err("不完整的帧数据".into()),
+            Ok(0) => return Err(crate::i18n::t("incomplete_frame").to_string()),
             Ok(n) => pos += n,
-            Err(e) => return Err(format!("读取帧失败: {e}")),
+            Err(e) => return Err(crate::i18n::tf("read_frame_failed", &e)),
         }
     }
     Ok(true)
@@ -176,7 +173,7 @@ fn quick_verify_embedded_video(
             .stderr(Stdio::null()),
     )
     .spawn()
-    .map_err(|e| format!("FFmpeg 自校验解码器启动失败: {e}"))?;
+    .map_err(|e| crate::i18n::tf("ffmpeg_verify_start", &e))?;
 
     let mut dec_out = BufReader::new(decoder.stdout.take().unwrap());
     let mut buf = vec![0u8; frame_size];
@@ -192,7 +189,7 @@ fn quick_verify_embedded_video(
 
         let frame_buf = std::mem::take(&mut buf);
         let img = RgbImage::from_raw(info.width, info.height, frame_buf)
-            .ok_or("自校验帧数据大小不匹配")?;
+            .ok_or_else(|| crate::i18n::t("verify_frame_mismatch").to_string())?;
         let (extracted, confidence) =
             core::extract_video_frame_with_confidence(&img, wm_bit_count, params)?;
         for i in 0..wm_bit_count {
@@ -244,7 +241,7 @@ fn quick_verify_embedded_video(
         }
     }
 
-    Err("视频已导出，但自校验未通过（建议提高码率或重试）".into())
+    Err(crate::i18n::t("verify_failed").to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -275,7 +272,7 @@ pub fn embed_video(
             .stderr(Stdio::null()),
     )
     .spawn()
-    .map_err(|e| format!("FFmpeg 解码器启动失败: {e}"))?;
+    .map_err(|e| crate::i18n::tf("ffmpeg_decoder_start", &e))?;
 
     // Encoder: raw RGB on stdin → output file (+ audio from original)
     let (v_args, a_args) = video_encoder_args(output);
@@ -298,7 +295,7 @@ pub fn embed_video(
             .stderr(Stdio::null()),
     )
     .spawn()
-    .map_err(|e| format!("FFmpeg 编码器启动失败: {e}"))?;
+    .map_err(|e| crate::i18n::tf("ffmpeg_encoder_start", &e))?;
 
     let mut dec_out = BufReader::new(decoder.stdout.take().unwrap());
     let mut enc_in = BufWriter::new(encoder.stdin.take().unwrap());
@@ -314,11 +311,11 @@ pub fn embed_video(
 
         let frame_buf = std::mem::take(&mut buf);
         let mut carrier =
-            RgbImage::from_raw(info.width, info.height, frame_buf).ok_or("帧数据大小不匹配")?;
+            RgbImage::from_raw(info.width, info.height, frame_buf).ok_or_else(|| crate::i18n::t("frame_size_mismatch").to_string())?;
         core::embed_video_frame_in_place(&mut carrier, wm_bits, params)?;
         enc_in
             .write_all(carrier.as_raw())
-            .map_err(|e| format!("写入帧失败: {e}"))?;
+            .map_err(|e| crate::i18n::tf("write_frame_failed", &e))?;
         buf = carrier.into_raw();
 
         idx += 1;
@@ -329,12 +326,12 @@ pub fn embed_video(
 
     enc_in
         .flush()
-        .map_err(|e| format!("编码器写入刷新失败: {e}"))?;
+        .map_err(|e| crate::i18n::tf("encoder_flush_failed", &e))?;
     drop(enc_in);
     let _ = decoder.wait();
-    let enc_status = encoder.wait().map_err(|e| format!("编码器异常: {e}"))?;
+    let enc_status = encoder.wait().map_err(|e| crate::i18n::tf("encoder_error", &e))?;
     if !enc_status.success() {
-        return Err("FFmpeg 编码失败".into());
+        return Err(crate::i18n::t("ffmpeg_encode_failed").to_string());
     }
 
     // Self-verification is best-effort; failure does not invalidate the export.
@@ -373,7 +370,7 @@ pub fn extract_video(
             .stderr(Stdio::null()),
     )
     .spawn()
-    .map_err(|e| format!("FFmpeg 解码器启动失败: {e}"))?;
+    .map_err(|e| crate::i18n::tf("ffmpeg_decoder_start", &e))?;
 
     let mut dec_out = BufReader::new(decoder.stdout.take().unwrap());
     let mut buf = vec![0u8; frame_size];
@@ -389,7 +386,7 @@ pub fn extract_video(
 
         let frame_buf = std::mem::take(&mut buf);
         let img =
-            RgbImage::from_raw(info.width, info.height, frame_buf).ok_or("帧数据大小不匹配")?;
+            RgbImage::from_raw(info.width, info.height, frame_buf).ok_or_else(|| crate::i18n::t("frame_size_mismatch").to_string())?;
         let (extracted, confidence) =
             core::extract_video_frame_with_confidence(&img, wm_bit_count, params)?;
         for i in 0..wm_bit_count {
@@ -430,7 +427,7 @@ pub fn extract_video(
     let _ = decoder.wait();
 
     if wm_count == 0 {
-        return Err("未能从视频中检测到水印".into());
+        return Err(crate::i18n::t("video_no_watermark").to_string());
     }
 
     // Final decode attempt on accumulated average

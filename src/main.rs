@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
+mod i18n;
 mod theme;
 mod watermark;
 
@@ -56,6 +57,7 @@ fn load_icon() -> Option<egui::IconData> {
 }
 
 fn main() -> eframe::Result {
+    i18n::init();
     let mut viewport = egui::ViewportBuilder::default()
         .with_inner_size([1100.0, 750.0])
         .with_min_inner_size([900.0, 600.0]);

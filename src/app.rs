@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 
+use crate::i18n::{t, tf};
 use crate::theme::{
     self, BG_BASE, BG_SURFACE, ERROR, SUCCESS, TEXT_DIM, TEXT_PRIMARY, TEXT_SECONDARY,
 };
@@ -91,7 +92,7 @@ impl App {
             result_image_path: None,
             result_video_path: None,
             result_audio_path: None,
-            status: "就绪".into(),
+            status: t("ready").into(),
             processing: false,
             receiver: None,
             progress: Arc::new(Mutex::new(0.0)),
@@ -106,7 +107,7 @@ impl App {
         if self.use_password {
             let pw = self.password.trim();
             if pw.is_empty() {
-                return Err("请输入密码".into());
+                return Err(t("err_enter_password").into());
             }
             Ok(WatermarkParams::from_password(pw))
         } else {
@@ -215,13 +216,13 @@ impl App {
         let cp = match &self.carrier_path {
             Some(p) => p.clone(),
             None => {
-                self.status = "✗ 请选择载体图片".into();
+                self.status = format!("✗ {}", t("err_select_carrier_image"));
                 return;
             }
         };
         let wm_text = self.watermark_text.clone();
         if wm_text.trim().is_empty() {
-            self.status = "✗ 请输入水印文字".into();
+            self.status = format!("✗ {}", t("err_enter_watermark"));
             return;
         }
 
@@ -232,9 +233,9 @@ impl App {
             .unwrap_or("png")
             .to_ascii_lowercase();
         let (filter_label, filter_ext) = match input_ext.as_str() {
-            "jpg" | "jpeg" => ("JPEG 图片", "jpg"),
-            "bmp" => ("BMP 图片", "bmp"),
-            _ => ("PNG 图片", "png"),
+            "jpg" | "jpeg" => (t("filter_jpeg"), "jpg"),
+            "bmp" => (t("filter_bmp"), "bmp"),
+            _ => (t("filter_png"), "png"),
         };
         let stem = cp
             .file_stem()
@@ -252,7 +253,7 @@ impl App {
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         self.processing = true;
-        self.status = "图片嵌入中…".into();
+        self.status = t("embedding_image").into();
         self.result_image_path = None;
         self.result_video_path = None;
         self.result_audio_path = None;
@@ -270,7 +271,7 @@ impl App {
             let carrier = match image::open(&cp) {
                 Ok(i) => i,
                 Err(e) => {
-                    let _ = tx.send(ProcessResult::Error(format!("载体图片打开失败：{e}")));
+                    let _ = tx.send(ProcessResult::Error(tf("err_carrier_open", &e)));
                     return;
                 }
             };
@@ -282,7 +283,7 @@ impl App {
                         let _ = tx.send(ProcessResult::EmbedImageDone(output));
                     }
                     Err(e) => {
-                        let _ = tx.send(ProcessResult::Error(format!("保存失败：{e}")));
+                        let _ = tx.send(ProcessResult::Error(tf("err_save", &e)));
                     }
                 },
                 Err(e) => {
@@ -303,13 +304,13 @@ impl App {
         let cp = match &self.carrier_path {
             Some(p) => p.clone(),
             None => {
-                self.status = "✗ 请选择视频文件".into();
+                self.status = format!("✗ {}", t("err_select_video"));
                 return;
             }
         };
         let wm_text = self.watermark_text.clone();
         if wm_text.trim().is_empty() {
-            self.status = "✗ 请输入水印文字".into();
+            self.status = format!("✗ {}", t("err_enter_watermark"));
             return;
         }
 
@@ -320,12 +321,12 @@ impl App {
             .unwrap_or("mp4")
             .to_ascii_lowercase();
         let (filter_label, filter_ext) = match input_ext.as_str() {
-            "mkv" => ("MKV 视频", "mkv"),
-            "avi" => ("AVI 视频", "avi"),
-            "mov" => ("MOV 视频", "mov"),
-            "webm" => ("WebM 视频", "webm"),
-            "flv" => ("FLV 视频", "flv"),
-            _ => ("MP4 视频", "mp4"),
+            "mkv" => (t("filter_mkv"), "mkv"),
+            "avi" => (t("filter_avi"), "avi"),
+            "mov" => (t("filter_mov"), "mov"),
+            "webm" => (t("filter_webm"), "webm"),
+            "flv" => (t("filter_flv"), "flv"),
+            _ => (t("filter_mp4"), "mp4"),
         };
         let stem = cp
             .file_stem()
@@ -343,7 +344,7 @@ impl App {
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         self.processing = true;
-        self.status = "视频嵌入中…".into();
+        self.status = t("embedding_video").into();
         self.result_image_path = None;
         self.result_video_path = None;
         self.result_audio_path = None;
@@ -382,13 +383,13 @@ impl App {
         let cp = match &self.carrier_path {
             Some(p) => p.clone(),
             None => {
-                self.status = "✗ 请选择音频文件".into();
+                self.status = format!("✗ {}", t("err_select_audio"));
                 return;
             }
         };
         let wm_text = self.watermark_text.clone();
         if wm_text.trim().is_empty() {
-            self.status = "✗ 请输入水印文字".into();
+            self.status = format!("✗ {}", t("err_enter_watermark"));
             return;
         }
 
@@ -399,12 +400,12 @@ impl App {
             .unwrap_or("m4a")
             .to_ascii_lowercase();
         let (filter_label, filter_ext) = match input_ext.as_str() {
-            "mp3" => ("MP3 音频", "mp3"),
-            "wav" => ("WAV 音频", "wav"),
-            "flac" => ("FLAC 音频", "flac"),
-            "aac" => ("AAC 音频", "aac"),
-            "ogg" => ("OGG 音频", "ogg"),
-            _ => ("M4A 音频", "m4a"),
+            "mp3" => (t("filter_mp3"), "mp3"),
+            "wav" => (t("filter_wav"), "wav"),
+            "flac" => (t("filter_flac"), "flac"),
+            "aac" => (t("filter_aac"), "aac"),
+            "ogg" => (t("filter_ogg"), "ogg"),
+            _ => (t("filter_m4a"), "m4a"),
         };
         let stem = cp
             .file_stem()
@@ -422,7 +423,7 @@ impl App {
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         self.processing = true;
-        self.status = "音频嵌入中…".into();
+        self.status = t("embedding_audio").into();
         self.result_image_path = None;
         self.result_video_path = None;
         self.result_audio_path = None;
@@ -462,7 +463,7 @@ impl App {
         let ip = match &self.input_path {
             Some(p) => p.clone(),
             None => {
-                self.status = "✗ 请选择含水印图片".into();
+                self.status = format!("✗ {}", t("err_select_wm_image"));
                 return;
             }
         };
@@ -470,7 +471,7 @@ impl App {
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         self.processing = true;
-        self.status = "提取中…".into();
+        self.status = t("extracting").into();
         self.result_image_path = None;
         self.result_text = None;
         self.result_video_path = None;
@@ -482,7 +483,7 @@ impl App {
             let img = match image::open(&ip) {
                 Ok(i) => i,
                 Err(e) => {
-                    let _ = tx.send(ProcessResult::Error(format!("图片打开失败：{e}")));
+                    let _ = tx.send(ProcessResult::Error(tf("err_image_open", &e)));
                     return;
                 }
             };
@@ -510,7 +511,7 @@ impl App {
         let ip = match &self.input_path {
             Some(p) => p.clone(),
             None => {
-                self.status = "✗ 请选择含水印视频".into();
+                self.status = format!("✗ {}", t("err_select_wm_video"));
                 return;
             }
         };
@@ -518,7 +519,7 @@ impl App {
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         self.processing = true;
-        self.status = "视频提取中…".into();
+        self.status = t("extracting_video").into();
         self.result_image_path = None;
         self.result_text = None;
         self.result_audio_path = None;
@@ -550,7 +551,7 @@ impl App {
         let ip = match &self.input_path {
             Some(p) => p.clone(),
             None => {
-                self.status = "✗ 请选择含水印音频".into();
+                self.status = format!("✗ {}", t("err_select_wm_audio"));
                 return;
             }
         };
@@ -558,7 +559,7 @@ impl App {
         let (tx, rx) = mpsc::channel();
         self.receiver = Some(rx);
         self.processing = true;
-        self.status = "音频提取中…".into();
+        self.status = t("extracting_audio").into();
         self.result_image_path = None;
         self.result_text = None;
         self.result_video_path = None;
@@ -590,23 +591,23 @@ impl App {
                         self.result_image_path = Some(path.clone());
                         self.result_video_path = None;
                         self.result_audio_path = None;
-                        self.status = format!("✓ 图片嵌入完成 → {}", path.display());
+                        self.status = tf("done_image_embed", &path.display());
                     }
                     ProcessResult::ExtractDone(text) => {
                         self.result_text = Some(text);
-                        self.status = "✓ 提取完成".into();
+                        self.status = t("extract_done").into();
                     }
                     ProcessResult::EmbedVideoDone(path) => {
                         self.result_image_path = None;
                         self.result_video_path = Some(path.clone());
                         self.result_audio_path = None;
-                        self.status = format!("✓ 视频嵌入完成 → {}", path.display());
+                        self.status = tf("done_video_embed", &path.display());
                     }
                     ProcessResult::EmbedAudioDone(path) => {
                         self.result_image_path = None;
                         self.result_audio_path = Some(path.clone());
                         self.result_video_path = None;
-                        self.status = format!("✓ 音频嵌入完成 → {}", path.display());
+                        self.status = tf("done_audio_embed", &path.display());
                     }
                     ProcessResult::Error(e) => {
                         self.status = format!("✗ {e}");
@@ -623,8 +624,8 @@ impl App {
     fn ui_mode_toggle(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             for (mode, label) in [
-                (Mode::Embed, "  嵌入水印  "),
-                (Mode::Extract, "  提取水印  "),
+                (Mode::Embed, t("mode_embed")),
+                (Mode::Extract, t("mode_extract")),
             ] {
                 let active = self.mode == mode;
                 let btn = egui::Button::new(RichText::new(label).size(13.0).color(if active {
@@ -660,9 +661,9 @@ impl App {
     fn ui_media_toggle(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             for (mt, label) in [
-                (MediaType::Image, "图片"),
-                (MediaType::Video, "视频"),
-                (MediaType::Audio, "音频"),
+                (MediaType::Image, t("media_image")),
+                (MediaType::Video, t("media_video")),
+                (MediaType::Audio, t("media_audio")),
             ] {
                 let active = self.media_type == mt;
                 let btn = egui::Button::new(RichText::new(label).size(12.0).color(if active {
@@ -709,7 +710,7 @@ impl App {
                 .as_ref()
                 .and_then(|p| p.file_name())
                 .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| "未选择".into());
+                .unwrap_or_else(|| t("not_selected").into());
 
             let txt_color = if path.is_some() {
                 TEXT_PRIMARY
@@ -726,7 +727,7 @@ impl App {
                 if ui
                     .add_enabled(
                         enabled,
-                        egui::Button::new("选择").corner_radius(CornerRadius::same(6)),
+                        egui::Button::new(t("btn_select")).corner_radius(CornerRadius::same(6)),
                     )
                     .clicked()
                 {
@@ -739,20 +740,20 @@ impl App {
 
     fn file_filters_for_media(&self) -> (&str, Vec<&str>) {
         match self.media_type {
-            MediaType::Image => ("图片", vec!["png", "jpg", "jpeg", "bmp"]),
+            MediaType::Image => (t("filter_image"), vec!["png", "jpg", "jpeg", "bmp"]),
             MediaType::Video => (
-                "视频",
+                t("filter_video"),
                 vec!["mp4", "avi", "mkv", "mov", "wmv", "flv", "webm"],
             ),
-            MediaType::Audio => ("音频", vec!["mp3", "wav", "flac", "aac", "m4a", "ogg"]),
+            MediaType::Audio => (t("filter_audio"), vec!["mp3", "wav", "flac", "aac", "m4a", "ogg"]),
         }
     }
 
     fn ui_files_embed(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let carrier_label = match self.media_type {
-            MediaType::Image => "载体图片",
-            MediaType::Video => "载体视频",
-            MediaType::Audio => "载体音频",
+            MediaType::Image => t("carrier_image"),
+            MediaType::Video => t("carrier_video"),
+            MediaType::Audio => t("carrier_audio"),
         };
         if Self::ui_file_row(ui, carrier_label, &self.carrier_path, !self.processing) {
             let (filter_name, exts) = self.file_filters_for_media();
@@ -776,9 +777,9 @@ impl App {
 
     fn ui_files_extract(&mut self, ui: &mut egui::Ui, ctx: &egui::Context) {
         let input_label = match self.media_type {
-            MediaType::Image => "含水印图片",
-            MediaType::Video => "含水印视频",
-            MediaType::Audio => "含水印音频",
+            MediaType::Image => t("wm_image"),
+            MediaType::Video => t("wm_video"),
+            MediaType::Audio => t("wm_audio"),
         };
         if Self::ui_file_row(ui, input_label, &self.input_path, !self.processing) {
             let (filter_name, exts) = self.file_filters_for_media();
@@ -802,10 +803,10 @@ impl App {
 
     fn ui_watermark_text(&mut self, ui: &mut egui::Ui) {
         ui.add_space(8.0);
-        ui.label(RichText::new("水印文字").size(12.0).color(TEXT_SECONDARY));
+        ui.label(RichText::new(t("watermark_text")).size(12.0).color(TEXT_SECONDARY));
         ui.add(
             egui::TextEdit::singleline(&mut self.watermark_text)
-                .hint_text("输入水印内容…")
+                .hint_text(t("hint_watermark"))
                 .desired_width(ui.available_width())
                 .font(egui::TextStyle::Monospace),
         );
@@ -813,7 +814,7 @@ impl App {
 
     fn ui_password_toggle(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
-            for (use_pw, label) in [(false, "无密码"), (true, "使用密码")] {
+            for (use_pw, label) in [(false, t("no_password")), (true, t("use_password"))] {
                 let active = self.use_password == use_pw;
                 let btn = egui::Button::new(RichText::new(label).size(12.0).color(if active {
                     Color32::WHITE
@@ -842,7 +843,7 @@ impl App {
             ui.add_space(6.0);
             ui.add(
                 egui::TextEdit::singleline(&mut self.password)
-                    .hint_text("输入密码…")
+                    .hint_text(t("hint_password"))
                     .password(true)
                     .desired_width(ui.available_width())
                     .font(egui::TextStyle::Monospace),
@@ -852,8 +853,8 @@ impl App {
 
     fn ui_exec_button(&mut self, ui: &mut egui::Ui) {
         let label = match self.mode {
-            Mode::Embed => "嵌入水印",
-            Mode::Extract => "提取水印",
+            Mode::Embed => t("btn_embed"),
+            Mode::Extract => t("btn_extract"),
         };
         let btn = egui::Button::new(
             RichText::new(label)
@@ -970,7 +971,7 @@ impl App {
             let text = if let Some(p) = path {
                 p.file_name()
                     .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "已选择".into())
+                    .unwrap_or_else(|| t("selected").into())
             } else {
                 empty_text.into()
             };
@@ -1001,10 +1002,10 @@ impl App {
                 // Carrier preview (full width)
                 Self::ui_preview_card(
                     ui,
-                    "载体图片",
+                    t("carrier_image"),
                     &self.carrier_texture,
                     &self.carrier_dims,
-                    "选择载体图片",
+                    t("ph_select_carrier"),
                     egui::vec2(img_w, img_h),
                 );
                 ui.add_space(gap);
@@ -1012,7 +1013,7 @@ impl App {
                 Self::glass_frame().show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.label(
-                        RichText::new("嵌入结果")
+                        RichText::new(t("embed_result"))
                             .size(11.0)
                             .color(Color32::from_white_alpha(120)),
                     );
@@ -1022,7 +1023,7 @@ impl App {
                     let text = if let Some(p) = &self.result_image_path {
                         format!("✓ {}", p.display())
                     } else {
-                        "嵌入后的图片路径将显示在此处".into()
+                        t("ph_embed_image").into()
                     };
                     let alpha = if self.result_image_path.is_some() {
                         180
@@ -1042,16 +1043,16 @@ impl App {
             MediaType::Video => {
                 Self::ui_path_placeholder(
                     ui,
-                    "载体视频",
+                    t("carrier_video"),
                     &self.carrier_path,
                     egui::vec2(img_w, img_h),
-                    "未选择视频文件",
+                    t("ph_no_video"),
                 );
                 ui.add_space(gap);
                 Self::glass_frame().show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.label(
-                        RichText::new("嵌入结果")
+                        RichText::new(t("embed_result"))
                             .size(11.0)
                             .color(Color32::from_white_alpha(120)),
                     );
@@ -1061,7 +1062,7 @@ impl App {
                     let text = if let Some(p) = &self.result_video_path {
                         format!("✓ {}", p.display())
                     } else {
-                        "嵌入后的视频路径将显示在此处".into()
+                        t("ph_embed_video").into()
                     };
                     let alpha = if self.result_video_path.is_some() {
                         180
@@ -1081,16 +1082,16 @@ impl App {
             MediaType::Audio => {
                 Self::ui_path_placeholder(
                     ui,
-                    "载体音频",
+                    t("carrier_audio"),
                     &self.carrier_path,
                     egui::vec2(img_w, img_h),
-                    "未选择音频文件",
+                    t("ph_no_audio"),
                 );
                 ui.add_space(gap);
                 Self::glass_frame().show(ui, |ui| {
                     ui.set_width(ui.available_width());
                     ui.label(
-                        RichText::new("嵌入结果")
+                        RichText::new(t("embed_result"))
                             .size(11.0)
                             .color(Color32::from_white_alpha(120)),
                     );
@@ -1100,7 +1101,7 @@ impl App {
                     let text = if let Some(p) = &self.result_audio_path {
                         format!("✓ {}", p.display())
                     } else {
-                        "嵌入后的音频路径将显示在此处".into()
+                        t("ph_embed_audio").into()
                     };
                     let alpha = if self.result_audio_path.is_some() {
                         180
@@ -1131,29 +1132,29 @@ impl App {
             MediaType::Image => {
                 Self::ui_preview_card(
                     ui,
-                    "含水印图片",
+                    t("wm_image"),
                     &self.input_texture,
                     &self.input_dims,
-                    "选择含水印的图片",
+                    t("ph_select_wm_image"),
                     egui::vec2(img_w, img_h),
                 );
             }
             MediaType::Video => {
                 Self::ui_path_placeholder(
                     ui,
-                    "含水印视频",
+                    t("wm_video"),
                     &self.input_path,
                     egui::vec2(img_w, img_h),
-                    "未选择视频文件",
+                    t("ph_no_video"),
                 );
             }
             MediaType::Audio => {
                 Self::ui_path_placeholder(
                     ui,
-                    "含水印音频",
+                    t("wm_audio"),
                     &self.input_path,
                     egui::vec2(img_w, img_h),
-                    "未选择音频文件",
+                    t("ph_no_audio"),
                 );
             }
         }
@@ -1164,7 +1165,7 @@ impl App {
         Self::glass_frame().show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.label(
-                RichText::new("提取结果")
+                RichText::new(t("extract_result"))
                     .size(11.0)
                     .color(Color32::from_white_alpha(120)),
             );
@@ -1179,7 +1180,7 @@ impl App {
                 ui.put(
                     rect,
                     egui::Label::new(
-                        RichText::new("提取的水印文字将显示在此处")
+                        RichText::new(t("ph_extract_result"))
                             .size(13.0)
                             .color(Color32::from_white_alpha(40)),
                     ),
@@ -1227,7 +1228,7 @@ impl eframe::App for App {
                             .strong()
                             .color(TEXT_PRIMARY),
                     );
-                    ui.label(RichText::new("隐形水印工具").size(12.0).color(TEXT_DIM));
+                    ui.label(RichText::new(t("subtitle")).size(12.0).color(TEXT_DIM));
                     ui.add_space(14.0);
 
                     self.ui_mode_toggle(ui);
@@ -1238,7 +1239,7 @@ impl eframe::App for App {
 
                     // 文件选择 + 嵌入模式下的水印文字输入
                     Self::glass_frame().show(ui, |ui| {
-                        Self::section_label(ui, "文  件");
+                        Self::section_label(ui, t("section_files"));
                         match self.mode {
                             Mode::Embed => {
                                 self.ui_files_embed(ui, ctx);

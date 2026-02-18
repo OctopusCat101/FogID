@@ -86,13 +86,10 @@ pub fn probe_audio(path: &Path) -> Result<AudioInfo, String> {
             .arg(path),
     )
     .output()
-    .map_err(|e| format!("无法运行 ffprobe: {e}\n请确保已安装 FFmpeg 并加入系统 PATH"))?;
+    .map_err(|e| crate::i18n::tf("ffprobe_not_found", &e))?;
 
     if !out.status.success() {
-        return Err(format!(
-            "ffprobe 失败: {}",
-            String::from_utf8_lossy(&out.stderr)
-        ));
+        return Err(crate::i18n::tf("ffprobe_failed", &String::from_utf8_lossy(&out.stderr)));
     }
 
     let text = String::from_utf8_lossy(&out.stdout);
@@ -132,9 +129,9 @@ pub fn probe_audio(path: &Path) -> Result<AudioInfo, String> {
         }
     }
 
-    let sample_rate = sample_rate.ok_or_else(|| "无法解析音频采样率".to_string())?;
-    let channels = channels.ok_or_else(|| "无法解析音频声道数".to_string())?;
-    let duration_secs = duration_secs.ok_or_else(|| "无法解析音频时长".to_string())?;
+    let sample_rate = sample_rate.ok_or_else(|| crate::i18n::t("parse_sample_rate").to_string())?;
+    let channels = channels.ok_or_else(|| crate::i18n::t("parse_channels").to_string())?;
+    let duration_secs = duration_secs.ok_or_else(|| crate::i18n::t("parse_duration").to_string())?;
 
     Ok(AudioInfo {
         sample_rate,
@@ -168,7 +165,7 @@ fn read_exact_or_eof(reader: &mut impl Read, buf: &mut [u8]) -> Result<bool, Str
                 return Ok(false);
             }
             Ok(n) => offset += n,
-            Err(e) => return Err(format!("读取音频帧失败: {e}")),
+            Err(e) => return Err(crate::i18n::tf("read_audio_failed", &e)),
         }
     }
     Ok(true)
@@ -202,20 +199,12 @@ pub fn embed_audio(
     mut on_progress: impl FnMut(f32),
 ) -> Result<(), String> {
     if wm_bits.len() != super::text::FIXED_WM_BITS {
-        return Err(format!(
-            "水印位数无效: {} != {}",
-            wm_bits.len(),
-            super::text::FIXED_WM_BITS
-        ));
+        return Err(crate::i18n::tf2("wm_bits_invalid", &wm_bits.len(), &super::text::FIXED_WM_BITS));
     }
 
     let info = probe_audio(input)?;
     if !(info.channels == 1 || info.channels == 2) {
-        return Err(format!(
-            "暂不支持该声道数: {}（仅支持单声道或双声道）。{}",
-            info.channels,
-            format_audio_meta(&info)
-        ));
+        return Err(crate::i18n::tf2("unsupported_channels", &info.channels, &format_audio_meta(&info)));
     }
 
     let channels = info.channels as usize;
@@ -244,7 +233,7 @@ pub fn embed_audio(
             .stderr(Stdio::null()),
     )
     .spawn()
-    .map_err(|e| format!("FFmpeg 音频解码器启动失败: {e}"))?;
+    .map_err(|e| crate::i18n::tf("ffmpeg_audio_decoder_start", &e))?;
 
     let mut dec_out = BufReader::new(decoder.stdout.take().unwrap());
     let mut all_interleaved: Vec<f32> = Vec::new();
@@ -255,13 +244,13 @@ pub fn embed_audio(
         all_interleaved.extend_from_slice(&chunk);
     }
 
-    let dec_status = decoder.wait().map_err(|e| format!("等待解码器失败: {e}"))?;
+    let dec_status = decoder.wait().map_err(|e| crate::i18n::tf("wait_decoder_failed", &e))?;
     if !dec_status.success() {
-        return Err("FFmpeg 音频解码失败".into());
+        return Err(crate::i18n::t("ffmpeg_audio_decode_failed").into());
     }
 
     if all_interleaved.len() < chunk_size {
-        return Err("音频过短，无法完成至少一个处理帧".into());
+        return Err(crate::i18n::t("audio_too_short").into());
     }
 
     on_progress(0.05);
@@ -311,7 +300,7 @@ pub fn embed_audio(
     .stdout(Stdio::null())
     .stderr(Stdio::null())
     .spawn()
-    .map_err(|e| format!("FFmpeg 音频编码器启动失败: {e}"))?;
+    .map_err(|e| crate::i18n::tf("ffmpeg_audio_encoder_start", &e))?;
 
     let mut enc_in = BufWriter::new(encoder.stdin.take().unwrap());
 
@@ -325,7 +314,7 @@ pub fn embed_audio(
         let end = (written + write_chunk_size).min(total_bytes);
         enc_in
             .write_all(&output_bytes[written..end])
-            .map_err(|e| format!("写入音频编码器失败: {e}"))?;
+            .map_err(|e| crate::i18n::tf("write_audio_encoder", &e))?;
         written = end;
         let frac = 0.80 + 0.15 * (written as f32 / total_bytes as f32);
         on_progress(frac.min(0.95));
@@ -333,12 +322,12 @@ pub fn embed_audio(
 
     enc_in
         .flush()
-        .map_err(|e| format!("刷新音频编码器失败: {e}"))?;
+        .map_err(|e| crate::i18n::tf("flush_audio_encoder", &e))?;
     drop(enc_in);
 
-    let enc_status = encoder.wait().map_err(|e| format!("等待编码器失败: {e}"))?;
+    let enc_status = encoder.wait().map_err(|e| crate::i18n::tf("wait_encoder_failed", &e))?;
     if !enc_status.success() {
-        return Err("FFmpeg 音频编码失败".into());
+        return Err(crate::i18n::t("ffmpeg_audio_encode_failed").into());
     }
 
     let _ = quick_verify_embedded_audio(output, params);
@@ -358,11 +347,7 @@ pub fn extract_audio(
 ) -> Result<String, String> {
     let info = probe_audio(input)?;
     if !(info.channels == 1 || info.channels == 2) {
-        return Err(format!(
-            "暂不支持该声道数: {}（仅支持单声道或双声道）。{}",
-            info.channels,
-            format_audio_meta(&info)
-        ));
+        return Err(crate::i18n::tf2("unsupported_channels", &info.channels, &format_audio_meta(&info)));
     }
 
     let channels = info.channels as usize;
@@ -389,7 +374,7 @@ pub fn extract_audio(
             .stderr(Stdio::null()),
     )
     .spawn()
-    .map_err(|e| format!("FFmpeg 音频解码器启动失败: {e}"))?;
+    .map_err(|e| crate::i18n::tf("ffmpeg_audio_decoder_start", &e))?;
 
     let mut dec_out = BufReader::new(decoder.stdout.take().unwrap());
     let mut all_interleaved: Vec<f32> = Vec::new();
@@ -400,13 +385,13 @@ pub fn extract_audio(
         all_interleaved.extend_from_slice(&chunk);
     }
 
-    let dec_status = decoder.wait().map_err(|e| format!("等待解码器失败: {e}"))?;
+    let dec_status = decoder.wait().map_err(|e| crate::i18n::tf("wait_decoder_failed", &e))?;
     if !dec_status.success() {
-        return Err("FFmpeg 音频解码失败".into());
+        return Err(crate::i18n::t("ffmpeg_audio_decode_failed").into());
     }
 
     if all_interleaved.len() < chunk_size {
-        return Err("音频过短，无法完成至少一个处理帧".into());
+        return Err(crate::i18n::t("audio_too_short").into());
     }
 
     on_progress(0.05);
@@ -467,7 +452,7 @@ pub fn extract_audio(
     }
 
     on_progress(1.0);
-    Err("未检测到水印（所有偏移均未匹配）".into())
+    Err(crate::i18n::t("audio_no_watermark").into())
 }
 
 /// Try extracting watermark at a specific sample offset.
@@ -504,11 +489,11 @@ fn try_extract_at_offset(
 fn quick_verify_embedded_audio(output: &Path, params: &WatermarkParams) -> Result<(), String> {
     match extract_audio(output, params, |_| {}) {
         Ok(text) => {
-            eprintln!("[audio] 自校验通过: {text}");
+            eprintln!("{}", crate::i18n::tf("audio_verify_ok", &text));
             Ok(())
         }
         Err(e) => {
-            eprintln!("[audio] 自校验失败 (best-effort): {e}");
+            eprintln!("{}", crate::i18n::tf("audio_verify_fail", &e));
             Ok(())
         }
     }

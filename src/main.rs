@@ -43,11 +43,29 @@ fn setup_fonts(ctx: &egui::Context) {
     ctx.set_fonts(fonts);
 }
 
+fn load_icon() -> Option<egui::IconData> {
+    let bytes = include_bytes!("../assets/icon.ico");
+    let image = image::load_from_memory(bytes).ok()?;
+    let image = image.to_rgba8();
+    let (width, height) = image.dimensions();
+    Some(egui::IconData {
+        rgba: image.into_raw(),
+        width,
+        height,
+    })
+}
+
 fn main() -> eframe::Result {
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_inner_size([1100.0, 750.0])
+        .with_min_inner_size([900.0, 600.0]);
+
+    if let Some(icon) = load_icon() {
+        viewport = viewport.with_icon(std::sync::Arc::new(icon));
+    }
+
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([1100.0, 750.0])
-            .with_min_inner_size([900.0, 600.0]),
+        viewport,
         ..Default::default()
     };
 
